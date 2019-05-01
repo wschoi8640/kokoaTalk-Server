@@ -1,4 +1,4 @@
-package hufs.cws.network;
+package server;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -18,8 +18,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-/*
- *  채팅 클라이언트와 연결되는 서버, 채팅 이외의 데이터 저장, 전송을 담당한다.
+import enums.MsgKeys;
+
+/**
+ *  This Class handles request from ChatClient
+ *  
+ *  @author wschoi8640
+ *  @version 1.0
  */
 public class ChatClientServerThread extends Thread {
 	private Socket sock;
@@ -55,7 +60,8 @@ public class ChatClientServerThread extends Thread {
 			messageSend = new PrintWriter(new OutputStreamWriter(out));
 			messageListRcv = new ObjectInputStream(in);
 			messageListSend = new ObjectOutputStream(out);
-			
+
+			// initialize LoginData.txt when server Starts
 			newLoginData = new File("LoginData.txt");
 			newLoginData.delete();
 			newLoginData = new File("LoginData.txt");
@@ -96,12 +102,9 @@ public class ChatClientServerThread extends Thread {
 				status = 0;
 
 				// Login size : 2, Join size : 3
-				if (message.get(0).equals("do_login")) {
+				if (message.get(0).equals(MsgKeys.LoginRequest.getKey())) {
 					String line;
-					String line1;
-					List<String> message1 = new ArrayList<String>();
 					String[] userInfo = new String[message.size()];
-					String[] friendInfo = new String[2];
 
 					// compare UserData with Requested Info
 					while ((line = userData.readLine()) != null) {
@@ -123,7 +126,7 @@ public class ChatClientServerThread extends Thread {
 								break;
 							}
 							status = 1; // Change status(wrong-password)
-							messageSend.println("wrong_pw");
+							messageSend.println(MsgKeys.LoginFailByPW.getKey());
 							messageSend.flush();
 							break;
 						}
@@ -132,14 +135,14 @@ public class ChatClientServerThread extends Thread {
 					// No id match
 					if ((status != 1) && (status != 2)) {
 						status = 0;
-						messageSend.println("no_id");
+						messageSend.println(MsgKeys.LoginFailByID.getKey());
 						messageSend.flush();
 					}
 
 					continue;
 				}
 
-				else if (message.get(0).equals("do_join")) {
+				else if (message.get(0).equals(MsgKeys.JoinRequest.getKey())) {
 					// Join Request
 					String line;
 					boolean alreadyexists = false; // if true can't join
@@ -149,7 +152,7 @@ public class ChatClientServerThread extends Thread {
 
 						if (userInfo[1].equals(message.get(2))) {
 							// Already exists
-							messageSend.println("join_fail");
+							messageSend.println(MsgKeys.JoinFail.getKey());
 							messageSend.flush();
 
 							alreadyexists = true;
@@ -175,7 +178,7 @@ public class ChatClientServerThread extends Thread {
 
 					// 회원 가입 성공
 					loginState.put(message.get(2), false);
-					messageSend.println("join_ok");
+					messageSend.println(MsgKeys.JoinSuccess.getKey());
 					messageSend.flush();
 				} else if (message.get(0).equals("rcv_friends")) {
 					String line;

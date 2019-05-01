@@ -1,4 +1,4 @@
-package hufs.cws.network;
+package server;
 
 import java.io.IOException;
 import java.io.ObjectOutputStream;
