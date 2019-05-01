@@ -4,28 +4,26 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.*;
+/**
+ * This Class initiates ChatClientServer
+ * 
+ * @author wschoi8640
+ * @version 1.0
+ */
+public class ChatClientServer {
+	public static void main(String[] args) {
+		ServerSocket server;
+		Socket sock;
+		
+		try {
+			server = new ServerSocket(10001);
 
-public class ChatClientServer 
-{
-	    public static void main(String[] args)
-	    {
-		    	ServerSocket server;
-		    	Socket sock;
-		    	List<ObjectOutputStream> listWriters = new ArrayList<ObjectOutputStream>();
-		    	
-		        try
-		        {
-		               server = new ServerSocket(10001);
-		               
-		               while(true)
-		               {
-		            	       sock = server.accept();
-				               new ChatClientServerThread(sock, listWriters).start();
-				       }
-		        } 
-		        catch(IOException e)
-		        {
-		               System.out.println(e);
-		        }
-	    }
+			while (true) {
+				sock = server.accept();
+				new ChatClientServerThread(sock).start();
+			}
+		} catch (IOException e) {
+			System.out.println(e);
+		}
+	}
 }
