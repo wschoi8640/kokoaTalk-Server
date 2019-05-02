@@ -37,6 +37,7 @@ public class ChatClientServerThread extends Thread {
 	private List<String> friendList;
 	private List<String> chatroomList;
 	private List<String> message;
+	private List<String> messageList;
 	private OutputStream out;
 	private InputStream in;
 	private PrintWriter messageWriter;
@@ -92,19 +93,20 @@ public class ChatClientServerThread extends Thread {
 					userFileReader = new BufferedReader(new FileReader(FileNames.UserFile.getName()));
 					friendFileReader = new BufferedReader(new FileReader(FileNames.FriendFile.getName()));
 					message = (ArrayList<String>) messageListReader.readObject();
+					messageList = new ArrayList<String>();
 				} catch (ClassNotFoundException e) {
 					break;
 				} catch (EOFException e) {
 					break;
 				}
 
-				// Default status(no-id)
-				status = "no-match";
-
 				// Login size : 2, Join size : 3
 				if (message.get(0).equals(MsgKeys.LoginRequest.getKey())) {
 					String line;
 					String[] userInfo = new String[message.size()];
+
+					// Default status(no-id)
+					status = "no-match";
 
 					// compare UserData with Requested Info
 					while ((line = userFileReader.readLine()) != null) {
@@ -113,8 +115,12 @@ public class ChatClientServerThread extends Thread {
 						if (userInfo[1].equals(message.get(1))) {
 							if (userInfo[2].equals(message.get(2))) {
 								status = "id-pw-match"; // Change status(login-success)
-								messageWriter.println("hello_" + userInfo[0]);
-								messageWriter.flush();
+								messageList.clear();
+								messageList.add("hello_" + userInfo[0]);
+								
+								messageListWriter.writeObject(messageList);
+								messageListWriter.flush();
+								messageListWriter.reset();
 								userName = userInfo[0];
 								BufferedWriter loginFileWriter = new BufferedWriter(
 										new FileWriter(FileNames.LoginFile.getName(), true));
@@ -215,8 +221,12 @@ public class ChatClientServerThread extends Thread {
 
 					// 존재하지 않는 경우 응답
 					if (status.equals("no-id-match")) {
-						messageWriter.println(MsgKeys.FriendAddFailByID.getKey());
-						messageWriter.flush();
+						messageList.clear();
+						messageList.add(MsgKeys.FriendAddFailByID.getKey());
+						
+						messageListWriter.writeObject(messageList);
+						messageListWriter.flush();
+						messageListWriter.reset();
 						continue;
 
 					}
@@ -232,8 +242,12 @@ public class ChatClientServerThread extends Thread {
 
 					// 이미 친구인 경우 응답
 					if (status.equals("already-friend")) {
-						messageWriter.println(MsgKeys.FriendAddFailByDupli.getKey());
-						messageWriter.flush();
+						messageList.clear();
+						messageList.add(MsgKeys.FriendAddFailByDupli.getKey());
+						
+						messageListWriter.writeObject(messageList);
+						messageListWriter.flush();
+						messageListWriter.reset();
 						continue;
 					} else {
 						// 친구 추가에 성공한 경우
@@ -247,8 +261,12 @@ public class ChatClientServerThread extends Thread {
 						friendFileWriter.flush();
 						friendFileWriter.close();
 
-						messageWriter.println("add_" + friendName);
-						messageWriter.flush();
+						messageList.clear();
+						messageList.add("add_" + friendName);
+						
+						messageListWriter.writeObject(messageList);
+						messageListWriter.flush();
+						messageListWriter.reset();
 					}
 
 				} else if (message.get(0).equals(MsgKeys.RemoveRequest.getKey())) {
@@ -295,8 +313,12 @@ public class ChatClientServerThread extends Thread {
 					}
 					friendFileWriter.close();
 
-					messageWriter.println(MsgKeys.RemoveSuccess.getKey());
-					messageWriter.flush();
+					messageList.clear();
+					messageList.add(MsgKeys.RemoveSuccess.getKey());
+					
+					messageListWriter.writeObject(messageList);
+					messageListWriter.flush();
+					messageListWriter.reset();
 				} else if (message.get(0).equals(MsgKeys.RefreshRequest.getKey())) {
 					// 로그인 상황 파일을 가져옴
 					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
@@ -329,10 +351,7 @@ public class ChatClientServerThread extends Thread {
 					messageListWriter.reset();
 				} else if (message.get(0).equals(MsgKeys.LogoutRequest.getKey())) {
 					// 로그아웃시 로그인 상태 파일에 유저 이름을 추가해준다.
-					BufferedWriter loginFileWriter = new BufferedWriter(
-							new FileWriter(FileNames.LoginFile.getName(), true));
-					BufferedWriter tempFileWriter = new BufferedWriter(
-							new FileWriter(FileNames.TempFile.getName(), true));
+					BufferedWriter tempFileWriter = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
 					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
 					String fileLine;
 					while ((fileLine = loginFileReader.readLine()) != null) {
@@ -343,6 +362,8 @@ public class ChatClientServerThread extends Thread {
 						}
 					}
 					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
+					loginFile.createNewFile();
+					BufferedWriter loginFileWriter = new BufferedWriter(new FileWriter(FileNames.LoginFile.getName()));
 
 					while ((fileLine = tempFileReader.readLine()) != null) {
 						loginFileWriter.write(fileLine);
