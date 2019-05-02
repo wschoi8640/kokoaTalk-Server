@@ -18,38 +18,38 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import enums.FileNames;
 import enums.MsgKeys;
 
 /**
- *  This Class handles request from ChatClient
- *  
- *  @author wschoi8640
- *  @version 1.0
+ * This Class handles request from ChatClient
+ * 
+ * @author wschoi8640
+ * @version 1.0
  */
 public class ChatClientServerThread extends Thread {
 	private Socket sock;
-	private File newFriendData;
-	private File newUserData;
-	private File newTempData;
-	private File newLoginData;
-	private File cData;
+	private File friendFile;
+	private File userFile;
+	private File tempFile;
+	private File loginFile;
+	private File chatroomFile;
 	private List<String> friendList;
 	private List<String> chatroomList;
-	private HashMap<String, Boolean> loginState = new HashMap<String, Boolean>();
 	private List<String> message;
 	private OutputStream out;
 	private InputStream in;
-	private PrintWriter messageSend;
-	private int status;
-	private ObjectInputStream messageListRcv;
-	private ObjectOutputStream messageListSend;
-	private BufferedReader chatroomData;
-	private BufferedReader userData;
-	private BufferedReader friendData;
-	private BufferedReader tempData;
-	private BufferedReader loginData;
-	private BufferedWriter chatroomOutput;
-	private String userName1 = null;
+	private PrintWriter messageWriter;
+	private String status;
+	private ObjectInputStream messageListReader;
+	private ObjectOutputStream messageListWriter;
+	private BufferedReader chatroomFileReader;
+	private BufferedReader userFileReader;
+	private BufferedReader friendFileReader;
+	private BufferedReader tempFileReader;
+	private BufferedReader loginFileReader;
+	private BufferedWriter chatroomFileOutput;
+	private String userName = null;
 
 	public ChatClientServerThread(Socket sock) {
 		this.sock = sock;
@@ -57,15 +57,15 @@ public class ChatClientServerThread extends Thread {
 		try {
 			out = sock.getOutputStream();
 			in = sock.getInputStream();
-			messageSend = new PrintWriter(new OutputStreamWriter(out));
-			messageListRcv = new ObjectInputStream(in);
-			messageListSend = new ObjectOutputStream(out);
+			messageWriter = new PrintWriter(new OutputStreamWriter(out));
+			messageListReader = new ObjectInputStream(in);
+			messageListWriter = new ObjectOutputStream(out);
 
 			// initialize LoginData.txt when server Starts
-			newLoginData = new File("LoginData.txt");
-			newLoginData.delete();
-			newLoginData = new File("LoginData.txt");
-			newLoginData.createNewFile();
+			loginFile = new File(FileNames.LoginFile.getName());
+			loginFile.delete();
+			loginFile = new File(FileNames.LoginFile.getName());
+			loginFile.createNewFile();
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -78,20 +78,20 @@ public class ChatClientServerThread extends Thread {
 			while (true) {
 
 				try {
-					newUserData = new File("UserData.txt");
-					newFriendData = new File("FriendData.txt");
-					newTempData = new File("TempData.txt");
-					if (!newUserData.exists())
-						newUserData.createNewFile();
-					if (!newFriendData.exists())
-						newFriendData.createNewFile();
-					if (!newLoginData.exists())
-						newLoginData.createNewFile();
-					newTempData.createNewFile();
-					loginData = new BufferedReader(new FileReader("LoginData.txt"));
-					userData = new BufferedReader(new FileReader("UserData.txt"));
-					friendData = new BufferedReader(new FileReader("FriendData.txt"));
-					message = (ArrayList<String>) messageListRcv.readObject();
+					userFile = new File(FileNames.UserFile.getName());
+					friendFile = new File(FileNames.FriendFile.getName());
+					tempFile = new File(FileNames.TempFile.getName());
+					if (!userFile.exists())
+						userFile.createNewFile();
+					if (!friendFile.exists())
+						friendFile.createNewFile();
+					if (!loginFile.exists())
+						loginFile.createNewFile();
+					tempFile.createNewFile();
+					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
+					userFileReader = new BufferedReader(new FileReader(FileNames.UserFile.getName()));
+					friendFileReader = new BufferedReader(new FileReader(FileNames.FriendFile.getName()));
+					message = (ArrayList<String>) messageListReader.readObject();
 				} catch (ClassNotFoundException e) {
 					break;
 				} catch (EOFException e) {
@@ -99,7 +99,7 @@ public class ChatClientServerThread extends Thread {
 				}
 
 				// Default status(no-id)
-				status = 0;
+				status = "no-match";
 
 				// Login size : 2, Join size : 3
 				if (message.get(0).equals(MsgKeys.LoginRequest.getKey())) {
@@ -107,54 +107,53 @@ public class ChatClientServerThread extends Thread {
 					String[] userInfo = new String[message.size()];
 
 					// compare UserData with Requested Info
-					while ((line = userData.readLine()) != null) {
+					while ((line = userFileReader.readLine()) != null) {
 						userInfo = line.split(" ");
 
 						if (userInfo[1].equals(message.get(1))) {
 							if (userInfo[2].equals(message.get(2))) {
-								status = 2; // Change status(login-success)
-								messageSend.println("hello_" + userInfo[0]);
-								messageSend.flush();
-								userName1 = userInfo[0];
-								BufferedWriter loginOutput = new BufferedWriter(new FileWriter("LoginData.txt", true));
+								status = "id-pw-match"; // Change status(login-success)
+								messageWriter.println("hello_" + userInfo[0]);
+								messageWriter.flush();
+								userName = userInfo[0];
+								BufferedWriter loginFileWriter = new BufferedWriter(
+										new FileWriter(FileNames.LoginFile.getName(), true));
 
 								// 로그인 상태를 유저 이름의 갯수로 파악할 것이므로 유저 이름을 하나 추가
-								loginOutput.write(userInfo[0]);
-								loginOutput.newLine();
-								loginOutput.flush();
-								loginOutput.close();
+								loginFileWriter.write(userInfo[0]);
+								loginFileWriter.newLine();
+								loginFileWriter.flush();
+								loginFileWriter.close();
 								break;
 							}
-							status = 1; // Change status(wrong-password)
-							messageSend.println(MsgKeys.LoginFailByPW.getKey());
-							messageSend.flush();
+							status = "id-match"; // Change status(wrong-password)
+							messageWriter.println(MsgKeys.LoginFailByPW.getKey());
+							messageWriter.flush();
 							break;
 						}
 
 					}
 					// No id match
-					if ((status != 1) && (status != 2)) {
-						status = 0;
-						messageSend.println(MsgKeys.LoginFailByID.getKey());
-						messageSend.flush();
+					if (status.equals("no-match")) {
+						messageWriter.println(MsgKeys.LoginFailByID.getKey());
+						messageWriter.flush();
 					}
-
 					continue;
 				}
 
 				else if (message.get(0).equals(MsgKeys.JoinRequest.getKey())) {
 					// Join Request
-					String line;
+					String userFileline;
+					String userName = message.get(2);
 					boolean alreadyexists = false; // if true can't join
-					String[] userInfo = new String[message.size()];
-					while ((line = userData.readLine()) != null) {
-						userInfo = line.split(" ");
+					String[] userFileData = new String[message.size()];
+					while ((userFileline = userFileReader.readLine()) != null) {
+						userFileData = userFileline.split(" ");
 
-						if (userInfo[1].equals(message.get(2))) {
+						if (userFileData[1].equals(userName)) {
 							// Already exists
-							messageSend.println(MsgKeys.JoinFail.getKey());
-							messageSend.flush();
-
+							messageWriter.println(MsgKeys.JoinFail.getKey());
+							messageWriter.flush();
 							alreadyexists = true;
 							break;
 						}
@@ -162,14 +161,11 @@ public class ChatClientServerThread extends Thread {
 					if (alreadyexists) {
 						continue;
 					}
-
 					// If not exist allow Join
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter("UserData.txt", true));
-
+					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.UserFile.getName(), true));
 					for (int i = 1; i < message.size(); i++) {
 						txtOutput.write(message.get(i));
-						if (i == message.size() - 1)
-							break;
+						if (i == message.size() - 1) break;
 						txtOutput.write(" ");
 					}
 					txtOutput.newLine();
@@ -177,10 +173,9 @@ public class ChatClientServerThread extends Thread {
 					txtOutput.close();
 
 					// 회원 가입 성공
-					loginState.put(message.get(2), false);
-					messageSend.println(MsgKeys.JoinSuccess.getKey());
-					messageSend.flush();
-				} else if (message.get(0).equals("rcv_friends")) {
+					messageWriter.println(MsgKeys.JoinSuccess.getKey());
+					messageWriter.flush();
+				} else if (message.get(0).equals(MsgKeys.ReceiveFriendsRequest.getKey())) {
 					String line;
 					String userName = message.get(1);
 					String[] friendInfo = new String[2];
@@ -188,24 +183,19 @@ public class ChatClientServerThread extends Thread {
 					friendList.add("message");
 
 					// compare FriendData with Requested Info
-					while ((line = friendData.readLine()) != null) {
+					while ((line = friendFileReader.readLine()) != null) {
 						friendInfo = line.split(" ");
 						if (friendInfo[0].equals(userName)) {
 							friendList.add(friendInfo[1]);
 						}
 					}
 					if (friendList.size() > 1) {
-						friendList.set(0, "rcv_ok");
-						messageListSend.writeObject(friendList);
-						messageListSend.flush();
-						messageListSend.reset();
-					} else if (friendList.size() == 1) {
-						friendList.set(0, "no_friends");
-						messageListSend.writeObject(friendList);
-						messageListSend.flush();
-						messageListSend.reset();
+						friendList.set(0, MsgKeys.ReceiveSuccess.getKey());
+						messageListWriter.writeObject(friendList);
+						messageListWriter.flush();
+						messageListWriter.reset();
 					}
-				} else if (message.get(0).equals("add_friend")) {
+				} else if (message.get(0).equals(MsgKeys.FriendAddRequest.getKey())) {
 					String line;
 					String userName = message.get(1);
 					String friendName = message.get(2);
@@ -215,7 +205,7 @@ public class ChatClientServerThread extends Thread {
 					boolean nosuchuser = true;
 
 					// 친구가 존재하는지 확인
-					while ((line = userData.readLine()) != null) {
+					while ((line = userFileReader.readLine()) != null) {
 						userInfo = line.split(" ");
 						if (userInfo[1].equals(friendName)) {
 							nosuchuser = false;
@@ -226,14 +216,14 @@ public class ChatClientServerThread extends Thread {
 
 					// 존재하지 않는 경우 응답
 					if (nosuchuser) {
-						messageSend.println("no_such_user");
-						messageSend.flush();
+						messageWriter.println(MsgKeys.FriendAddFailByID.getKey());
+						messageWriter.flush();
 						continue;
 
 					}
 
 					// 이미 친구인지 확인
-					while ((line = friendData.readLine()) != null) {
+					while ((line = friendFileReader.readLine()) != null) {
 						friendInfo = line.split(" ");
 						if (friendInfo[0].equals(userName) && friendInfo[1].equals(friendName)) {
 							alreadyexists = true;
@@ -244,13 +234,14 @@ public class ChatClientServerThread extends Thread {
 					// 이미 친구인 경우 응답
 					if (alreadyexists) {
 
-						messageSend.println("friend_exists");
-						messageSend.flush();
+						messageWriter.println(MsgKeys.FriendAddFailByDupli.getKey());
+						messageWriter.flush();
 						continue;
 					} else {
 						// 친구 추가에 성공한 경우
 						// 친구 파일에 해당 내용 추가하고 클라이언트에 응답
-						BufferedWriter txtOutput = new BufferedWriter(new FileWriter("FriendData.txt", true));
+						BufferedWriter txtOutput = new BufferedWriter(
+								new FileWriter(FileNames.FriendFile.getName(), true));
 						txtOutput.write(userName);
 						txtOutput.write(" ");
 						txtOutput.write(friendName);
@@ -258,16 +249,16 @@ public class ChatClientServerThread extends Thread {
 						txtOutput.flush();
 						txtOutput.close();
 
-						messageSend.println("add_" + friendName);
-						messageSend.flush();
+						messageWriter.println("add_" + friendName);
+						messageWriter.flush();
 					}
 
-				} else if (message.get(0).equals("rmv_friend")) {
+				} else if (message.get(0).equals(MsgKeys.RemoveRequest.getKey())) {
 					String line;
 					String userName = message.get(1);
 					List<String> rmvFriendsList = new ArrayList<String>();
 					String[] friendInfo = new String[2];
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter("TempData.txt"));
+					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
 
 					// 삭제할 친구 리스트를 가져옴
 					for (int i = 2; i < message.size(); i++) {
@@ -275,7 +266,7 @@ public class ChatClientServerThread extends Thread {
 					}
 
 					// 친구 관계인지 확인 후, 임시 파일에 제외하고 남은 친구들만 추가
-					while ((line = friendData.readLine()) != null) {
+					while ((line = friendFileReader.readLine()) != null) {
 						friendInfo = line.split(" ");
 						if (friendInfo[0].equals(userName)) {
 							if (!rmvFriendsList.contains(friendInfo[1])) {
@@ -296,28 +287,28 @@ public class ChatClientServerThread extends Thread {
 					txtOutput.close();
 
 					// 임시파일의 내용을 친구 관계 파일로 복사
-					tempData = new BufferedReader(new FileReader("TempData.txt"));
-					BufferedWriter tmpOutput = new BufferedWriter(new FileWriter("FriendData.txt"));
+					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
+					BufferedWriter tmpOutput = new BufferedWriter(new FileWriter(FileNames.FriendFile.getName()));
 					String tmp_line;
-					while ((tmp_line = tempData.readLine()) != null) {
+					while ((tmp_line = tempFileReader.readLine()) != null) {
 						tmpOutput.write(tmp_line);
 						tmpOutput.newLine();
 						tmpOutput.flush();
 					}
 					tmpOutput.close();
 
-					messageSend.println("rmv_ok");
-					messageSend.flush();
-				} else if (message.get(0).equals("do_refresh")) {
+					messageWriter.println(MsgKeys.RemoveSuccess.getKey());
+					messageWriter.flush();
+				} else if (message.get(0).equals(MsgKeys.RefreshRequest.getKey())) {
 					// 로그인 상황 파일을 가져옴
-					loginData = new BufferedReader(new FileReader("LoginData.txt"));
+					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
 					HashMap<String, Integer> countUser = new HashMap<String, Integer>();
 					List<String> updateList = new ArrayList<String>();
-					updateList.add("refresh_ok");
+					updateList.add(MsgKeys.RefreshSuccess.getKey());
 					String cur_line = "";
 
 					// 해당 유저의 이름이 없으면 추가하고 있으면 갯수를 셈
-					while ((cur_line = loginData.readLine()) != null) {
+					while ((cur_line = loginFileReader.readLine()) != null) {
 						if (countUser.get(cur_line) == null) {
 							countUser.put(cur_line, 1);
 						} else {
@@ -333,28 +324,29 @@ public class ChatClientServerThread extends Thread {
 					});
 
 					// 갱신리스트 전송
-					messageListSend.writeObject(updateList);
-					messageListSend.flush();
-					messageListSend.reset();
-				} else if (message.get(0).equals("do_logout")) {
+					messageListWriter.writeObject(updateList);
+					messageListWriter.flush();
+					messageListWriter.reset();
+				} else if (message.get(0).equals(MsgKeys.LogoutRequest.getKey())) {
 					// 로그아웃시 로그인 상태 파일에 유저 이름을 추가해준다.
-					BufferedWriter loginOutput = new BufferedWriter(new FileWriter("LoginData.txt", true));
-					if (userName1 != null) {
-						loginOutput.write(userName1);
+					BufferedWriter loginOutput = new BufferedWriter(
+							new FileWriter(FileNames.LoginFile.getName(), true));
+					if (userName != null) {
+						loginOutput.write(userName);
 						loginOutput.newLine();
 						loginOutput.flush();
-						userName1 = null;
+						userName = null;
 					}
 					loginOutput.close();
-				} else if (message.get(0).equals("add_chatroom")) {
+				} else if (message.get(0).equals(MsgKeys.ChatroomAddRequest.getKey())) {
 					// 유저별로 채팅방 목록을 따로 관리한다.
 					String userChatroom = message.get(1) + "_chatroom.txt";
 
-					cData = new File(userChatroom);
-					if (!cData.exists())
-						cData.createNewFile();
-					chatroomData = new BufferedReader(new FileReader(userChatroom));
-					chatroomOutput = new BufferedWriter(new FileWriter(userChatroom, true));
+					chatroomFile = new File(userChatroom);
+					if (!chatroomFile.exists())
+						chatroomFile.createNewFile();
+					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
+					chatroomFileOutput = new BufferedWriter(new FileWriter(userChatroom, true));
 
 					String line;
 					int count = 0;
@@ -364,7 +356,7 @@ public class ChatClientServerThread extends Thread {
 
 					// 이미 채팅방이 존재하는지 확인한다.
 					// 전송해온 채팅방과 서버에 저장된 채팅방을 비교한다.
-					while ((line = chatroomData.readLine()) != null) {
+					while ((line = chatroomFileReader.readLine()) != null) {
 						chatroomInfos = line.split(", ");
 						for (String messageInfo : messageInfos) {
 							for (String chatroomInfo : chatroomInfos) {
@@ -383,29 +375,29 @@ public class ChatClientServerThread extends Thread {
 
 					// 채팅방이 이미 존재할 경우 클라이언트에 알림
 					if (hasSameChatroom == true) {
-						messageSend.println("chatroom_exists");
-						messageSend.flush();
+						messageWriter.println(MsgKeys.ChatroomAddFailByDupli.getKey());
+						messageWriter.flush();
 						continue;
 					}
 					// 채팅방이 추가되었음을 클라이언트에 알림
 					else {
-						chatroomOutput.write(message.get(2));
-						chatroomOutput.newLine();
-						chatroomOutput.flush();
+						chatroomFileOutput.write(message.get(2));
+						chatroomFileOutput.newLine();
+						chatroomFileOutput.flush();
 
-						messageSend.println("chatroom_added");
-						messageSend.flush();
+						messageWriter.println(MsgKeys.ChatroomAddSuccess.getKey());
+						messageWriter.flush();
 						message.clear();
-						chatroomOutput.close();
+						chatroomFileOutput.close();
 					}
-				} else if (message.get(0).equals("rcv_chatrooms")) {
+				} else if (message.get(0).equals(MsgKeys.ReceiveChatroomsRequest.getKey())) {
 					String userName = message.get(1);
 					String userChatroom = userName + "_chatroom.txt";
 
-					cData = new File(userChatroom);
-					if (!cData.exists())
-						cData.createNewFile();
-					chatroomData = new BufferedReader(new FileReader(userChatroom));
+					chatroomFile = new File(userChatroom);
+					if (!chatroomFile.exists())
+						chatroomFile.createNewFile();
+					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
 
 					String line;
 					String chatroomInfo = "";
@@ -414,27 +406,19 @@ public class ChatClientServerThread extends Thread {
 					chatroomList.add("message");
 
 					// 해당 유저의 채팅방 리스트를 가져와 리스트에 저장한다.
-					while ((line = chatroomData.readLine()) != null) {
+					while ((line = chatroomFileReader.readLine()) != null) {
 						chatroomInfo = line;
 						chatroomList.add(chatroomInfo);
 					}
 
 					// 채팅방이 존재하면 클라이언트로 전송한다.
 					if (chatroomList.size() > 1) {
-						chatroomList.set(0, "rcv_ok");
-						messageListSend.writeObject(chatroomList);
-						messageListSend.flush();
-						messageListSend.reset();
+						chatroomList.set(0, MsgKeys.ReceiveSuccess.getKey());
+						messageListWriter.writeObject(chatroomList);
+						messageListWriter.flush();
+						messageListWriter.reset();
 					}
-
-					// 존재하지 않는 경우 알려준다
-					else if (chatroomList.size() == 1) {
-						chatroomList.set(0, "no_chatrooms");
-						messageListSend.writeObject(chatroomList);
-						messageListSend.flush();
-						messageListSend.reset();
-					}
-				} else if (message.get(0).equals("rmv_chatroom")) {
+				} else if (message.get(0).equals(MsgKeys.ChatroomRemoveRequest.getKey())) {
 					String line;
 					String userName = message.get(1);
 					String userChatroom = userName + "_chatroom.txt";
@@ -442,14 +426,14 @@ public class ChatClientServerThread extends Thread {
 					String[] chatroomsInfo = new String[10];
 					String[] rmvChatInfos = new String[10];
 
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter("TempData.txt"));
-					chatroomData = new BufferedReader(new FileReader(userChatroom));
+					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
+					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
 
 					// 삭제할 채팅방 목록을 가져온다
 					for (int i = 2; i < message.size(); i++) {
 						rmvChatroomsList.add(message.get(i));
 					}
-					while ((line = chatroomData.readLine()) != null) {
+					while ((line = chatroomFileReader.readLine()) != null) {
 						chatroomsInfo = line.split(", ");
 						// 해당 채팅방이 존재하는지 확인 한 후, 이를 제외한 채팅방들을 임시파일에 저장한다
 						for (String rmvChatroom : rmvChatroomsList) {
@@ -477,18 +461,18 @@ public class ChatClientServerThread extends Thread {
 					txtOutput.close();
 
 					// 임시 파일의 내용을 채팅방 정보로 복사한다.
-					tempData = new BufferedReader(new FileReader("TempData.txt"));
+					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
 					BufferedWriter tmpOutput = new BufferedWriter(new FileWriter(userChatroom));
 					String tmp_line;
-					while ((tmp_line = tempData.readLine()) != null) {
+					while ((tmp_line = tempFileReader.readLine()) != null) {
 						tmpOutput.write(tmp_line);
 						tmpOutput.newLine();
 						tmpOutput.flush();
 					}
 					tmpOutput.close();
 
-					messageSend.println("rmv_ok");
-					messageSend.flush();
+					messageWriter.println(MsgKeys.RemoveSuccess.getKey());
+					messageWriter.flush();
 				}
 			}
 		} catch (IOException e) {
