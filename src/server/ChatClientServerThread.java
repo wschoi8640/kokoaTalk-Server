@@ -162,15 +162,15 @@ public class ChatClientServerThread extends Thread {
 						continue;
 					}
 					// If not exist allow Join
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.UserFile.getName(), true));
+					BufferedWriter userFileWriter = new BufferedWriter(new FileWriter(FileNames.UserFile.getName(), true));
 					for (int i = 1; i < message.size(); i++) {
-						txtOutput.write(message.get(i));
+						userFileWriter.write(message.get(i));
 						if (i == message.size() - 1) break;
-						txtOutput.write(" ");
+						userFileWriter.write(" ");
 					}
-					txtOutput.newLine();
-					txtOutput.flush();
-					txtOutput.close();
+					userFileWriter.newLine();
+					userFileWriter.flush();
+					userFileWriter.close();
 
 					// 회원 가입 성공
 					messageWriter.println(MsgKeys.JoinSuccess.getKey());
@@ -178,15 +178,15 @@ public class ChatClientServerThread extends Thread {
 				} else if (message.get(0).equals(MsgKeys.ReceiveFriendsRequest.getKey())) {
 					String line;
 					String userName = message.get(1);
-					String[] friendInfo = new String[2];
+					String[] friendFileData = new String[2];
 					friendList = new ArrayList<String>();
-					friendList.add("message");
+					friendList.add("dummy");
 
 					// compare FriendData with Requested Info
 					while ((line = friendFileReader.readLine()) != null) {
-						friendInfo = line.split(" ");
-						if (friendInfo[0].equals(userName)) {
-							friendList.add(friendInfo[1]);
+						friendFileData = line.split(" ");
+						if (friendFileData[0].equals(userName)) {
+							friendList.add(friendFileData[1]);
 						}
 					}
 					if (friendList.size() > 1) {
@@ -196,26 +196,25 @@ public class ChatClientServerThread extends Thread {
 						messageListWriter.reset();
 					}
 				} else if (message.get(0).equals(MsgKeys.FriendAddRequest.getKey())) {
-					String line;
+					String fileLine;
 					String userName = message.get(1);
 					String friendName = message.get(2);
-					String[] friendInfo = new String[2];
-					String[] userInfo = new String[3];
-					boolean alreadyexists = false;
-					boolean nosuchuser = true;
+					String[] friendFileData = new String[2];
+					String[] userFileData = new String[3];
 
+					status = "err";
 					// 친구가 존재하는지 확인
-					while ((line = userFileReader.readLine()) != null) {
-						userInfo = line.split(" ");
-						if (userInfo[1].equals(friendName)) {
-							nosuchuser = false;
-							friendName = userInfo[0];
+					while ((fileLine = userFileReader.readLine()) != null) {
+						userFileData = fileLine.split(" ");
+						if (userFileData[1].equals(friendName)) {
+							status = "no-id-match";
+							friendName = userFileData[0];
 							break;
 						}
 					}
 
 					// 존재하지 않는 경우 응답
-					if (nosuchuser) {
+					if (status.equals("no-id-match")) {
 						messageWriter.println(MsgKeys.FriendAddFailByID.getKey());
 						messageWriter.flush();
 						continue;
@@ -223,79 +222,78 @@ public class ChatClientServerThread extends Thread {
 					}
 
 					// 이미 친구인지 확인
-					while ((line = friendFileReader.readLine()) != null) {
-						friendInfo = line.split(" ");
-						if (friendInfo[0].equals(userName) && friendInfo[1].equals(friendName)) {
-							alreadyexists = true;
+					while ((fileLine = friendFileReader.readLine()) != null) {
+						friendFileData = fileLine.split(" ");
+						if (friendFileData[0].equals(userName) && friendFileData[1].equals(friendName)) {
+							status = "already-friend";
 							break;
 						}
 					}
 
 					// 이미 친구인 경우 응답
-					if (alreadyexists) {
-
+					if (status.equals("already-friend")) {
 						messageWriter.println(MsgKeys.FriendAddFailByDupli.getKey());
 						messageWriter.flush();
 						continue;
 					} else {
 						// 친구 추가에 성공한 경우
 						// 친구 파일에 해당 내용 추가하고 클라이언트에 응답
-						BufferedWriter txtOutput = new BufferedWriter(
+						BufferedWriter friendFileWriter = new BufferedWriter(
 								new FileWriter(FileNames.FriendFile.getName(), true));
-						txtOutput.write(userName);
-						txtOutput.write(" ");
-						txtOutput.write(friendName);
-						txtOutput.newLine();
-						txtOutput.flush();
-						txtOutput.close();
+						friendFileWriter.write(userName);
+						friendFileWriter.write(" ");
+						friendFileWriter.write(friendName);
+						friendFileWriter.newLine();
+						friendFileWriter.flush();
+						friendFileWriter.close();
 
 						messageWriter.println("add_" + friendName);
 						messageWriter.flush();
 					}
 
 				} else if (message.get(0).equals(MsgKeys.RemoveRequest.getKey())) {
-					String line;
+					String friendFileLine;
 					String userName = message.get(1);
 					List<String> rmvFriendsList = new ArrayList<String>();
-					String[] friendInfo = new String[2];
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
+					String[] friendFileData = new String[2];
+					BufferedWriter tempFileWriter = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
 
 					// 삭제할 친구 리스트를 가져옴
 					for (int i = 2; i < message.size(); i++) {
 						rmvFriendsList.add(message.get(i));
 					}
 
-					// 친구 관계인지 확인 후, 임시 파일에 제외하고 남은 친구들만 추가
-					while ((line = friendFileReader.readLine()) != null) {
-						friendInfo = line.split(" ");
-						if (friendInfo[0].equals(userName)) {
-							if (!rmvFriendsList.contains(friendInfo[1])) {
-								txtOutput.write(friendInfo[0]);
-								txtOutput.write(" ");
-								txtOutput.write(friendInfo[1]);
-								txtOutput.newLine();
+					// 친구 관계인지 확인 후, 임시 파일에 친구들만 추가
+					while ((friendFileLine = friendFileReader.readLine()) != null) {
+						friendFileData = friendFileLine.split(" ");
+						if (friendFileData[0].equals(userName)) {
+							if (!rmvFriendsList.contains(friendFileData[1])) {
+								tempFileWriter.write(friendFileData[0]);
+								tempFileWriter.write(" ");
+								tempFileWriter.write(friendFileData[1]);
+								tempFileWriter.newLine();
 							}
 						} else {
-							txtOutput.write(friendInfo[0]);
-							txtOutput.write(" ");
-							txtOutput.write(friendInfo[1]);
-							txtOutput.newLine();
+							tempFileWriter.write(friendFileData[0]);
+							tempFileWriter.write(" ");
+							tempFileWriter.write(friendFileData[1]);
+							tempFileWriter.newLine();
 						}
-						txtOutput.flush();
+						tempFileWriter.flush();
 
 					}
-					txtOutput.close();
+					tempFileWriter.close();
 
 					// 임시파일의 내용을 친구 관계 파일로 복사
 					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
-					BufferedWriter tmpOutput = new BufferedWriter(new FileWriter(FileNames.FriendFile.getName()));
-					String tmp_line;
-					while ((tmp_line = tempFileReader.readLine()) != null) {
-						tmpOutput.write(tmp_line);
-						tmpOutput.newLine();
-						tmpOutput.flush();
+					BufferedWriter friendFileWriter = new BufferedWriter(new FileWriter(FileNames.FriendFile.getName()));
+					String tempFileLine;
+					while ((tempFileLine = tempFileReader.readLine()) != null) {
+						friendFileWriter.write(tempFileLine);
+						friendFileWriter.newLine();
+						friendFileWriter.flush();
 					}
-					tmpOutput.close();
+					friendFileWriter.close();
 
 					messageWriter.println(MsgKeys.RemoveSuccess.getKey());
 					messageWriter.flush();
@@ -303,41 +301,55 @@ public class ChatClientServerThread extends Thread {
 					// 로그인 상황 파일을 가져옴
 					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
 					HashMap<String, Integer> countUser = new HashMap<String, Integer>();
-					List<String> updateList = new ArrayList<String>();
-					updateList.add(MsgKeys.RefreshSuccess.getKey());
+					List<String> refreshList = new ArrayList<String>();
+					refreshList.add(MsgKeys.RefreshSuccess.getKey());
 					String cur_line = "";
 
 					// 해당 유저의 이름이 없으면 추가하고 있으면 갯수를 셈
 					while ((cur_line = loginFileReader.readLine()) != null) {
-						if (countUser.get(cur_line) == null) {
-							countUser.put(cur_line, 1);
-						} else {
-							countUser.put(cur_line, countUser.get(cur_line) + 1);
+						if(message.contains(cur_line)) {
+							if (countUser.get(cur_line) == null) {
+								countUser.put(cur_line, 1);
+							} else {
+								countUser.put(cur_line, countUser.get(cur_line) + 1);
+							}
 						}
 					}
 
 					// 유저의 이름이 홀수개 들어있으면 접속중이라는 의미, 갱신리스트에 추가해줌
 					countUser.forEach((user1, count) -> {
 						if (count % 2 == 1) {
-							updateList.add(user1);
+							refreshList.add(user1);
 						}
 					});
 
 					// 갱신리스트 전송
-					messageListWriter.writeObject(updateList);
+					messageListWriter.writeObject(refreshList);
 					messageListWriter.flush();
 					messageListWriter.reset();
 				} else if (message.get(0).equals(MsgKeys.LogoutRequest.getKey())) {
 					// 로그아웃시 로그인 상태 파일에 유저 이름을 추가해준다.
-					BufferedWriter loginOutput = new BufferedWriter(
+					BufferedWriter loginFileWriter = new BufferedWriter(
 							new FileWriter(FileNames.LoginFile.getName(), true));
-					if (userName != null) {
-						loginOutput.write(userName);
-						loginOutput.newLine();
-						loginOutput.flush();
-						userName = null;
+					BufferedWriter tempFileWriter = new BufferedWriter(
+							new FileWriter(FileNames.TempFile.getName(), true));
+					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
+					String fileLine;
+					while ((fileLine = loginFileReader.readLine()) != null) {
+						if(!fileLine.equals(userName)) {
+							tempFileWriter.write(fileLine);
+							tempFileWriter.newLine();
+							tempFileWriter.flush();
+						}
 					}
-					loginOutput.close();
+					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
+
+					while ((fileLine = tempFileReader.readLine()) != null) {
+						loginFileWriter.write(fileLine);
+						loginFileWriter.newLine();
+						loginFileWriter.flush();
+					}
+					loginFileWriter.close();
 				} else if (message.get(0).equals(MsgKeys.ChatroomAddRequest.getKey())) {
 					// 유저별로 채팅방 목록을 따로 관리한다.
 					String userChatroom = message.get(1) + "_chatroom.txt";
@@ -403,7 +415,7 @@ public class ChatClientServerThread extends Thread {
 					String chatroomInfo = "";
 
 					chatroomList = new ArrayList<String>();
-					chatroomList.add("message");
+					chatroomList.add("dummy");
 
 					// 해당 유저의 채팅방 리스트를 가져와 리스트에 저장한다.
 					while ((line = chatroomFileReader.readLine()) != null) {
