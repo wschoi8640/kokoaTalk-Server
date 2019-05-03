@@ -33,7 +33,7 @@ public class ChatClientServerThread extends Thread {
 	private File userFile;
 	private File tempFile;
 	private File loginFile;
-	private File chatroomFile;
+	private File chatroomUserFile;
 	private List<String> friendList;
 	private List<String> chatroomList;
 	private List<String> message;
@@ -44,12 +44,12 @@ public class ChatClientServerThread extends Thread {
 	private String status;
 	private ObjectInputStream messageListReader;
 	private ObjectOutputStream messageListWriter;
-	private BufferedReader chatroomFileReader;
+	private BufferedReader chatroomUserFileReader;
 	private BufferedReader userFileReader;
 	private BufferedReader friendFileReader;
 	private BufferedReader tempFileReader;
 	private BufferedReader loginFileReader;
-	private BufferedWriter chatroomFileOutput;
+	private BufferedWriter chatroomUserFileWriter;
 	private String userName = null;
 
 	public ChatClientServerThread(Socket sock) {
@@ -337,28 +337,15 @@ public class ChatClientServerThread extends Thread {
 				} else if (message.get(0).equals(MsgKeys.RefreshRequest.getKey())) {
 					// 로그인 상황 파일을 가져옴
 					loginFileReader = new BufferedReader(new FileReader(FileNames.LoginFile.getName()));
-					HashMap<String, Integer> countUser = new HashMap<String, Integer>();
 					List<String> refreshList = new ArrayList<String>();
-					refreshList.add(MsgKeys.RefreshSuccess.getKey());
 					String cur_line = "";
-
-					// 해당 유저의 이름이 없으면 추가하고 있으면 갯수를 셈
+					refreshList.add(MsgKeys.RefreshSuccess.getKey());
+					// 해당 유저의 이름이 있으면 추가
 					while ((cur_line = loginFileReader.readLine()) != null) {
 						if (message.contains(cur_line)) {
-							if (countUser.get(cur_line) == null) {
-								countUser.put(cur_line, 1);
-							} else {
-								countUser.put(cur_line, countUser.get(cur_line) + 1);
-							}
+							refreshList.add(cur_line);
 						}
 					}
-
-					// 유저의 이름이 홀수개 들어있으면 접속중이라는 의미, 갱신리스트에 추가해줌
-					countUser.forEach((user1, count) -> {
-						if (count % 2 == 1) {
-							refreshList.add(user1);
-						}
-					});
 
 					// 갱신리스트 전송
 					messageListWriter.writeObject(refreshList);
@@ -389,36 +376,36 @@ public class ChatClientServerThread extends Thread {
 				} else if (message.get(0).equals(MsgKeys.ChatroomAddRequest.getKey())) {
 					// 유저별로 채팅방 목록을 따로 관리한다.
 					String userChatroom = message.get(1) + "_chatroom.txt";
+					
+					chatroomUserFile = new File(userChatroom);
+					if (!chatroomUserFile.exists())
+						chatroomUserFile.createNewFile();
+					chatroomUserFileReader = new BufferedReader(new FileReader(userChatroom));
+					chatroomUserFileWriter = new BufferedWriter(new FileWriter(userChatroom, true));
 
-					chatroomFile = new File(userChatroom);
-					if (!chatroomFile.exists())
-						chatroomFile.createNewFile();
-					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
-					chatroomFileOutput = new BufferedWriter(new FileWriter(userChatroom, true));
-
-					String line;
-					int count = 0;
+					String chatroomLine;
+					int userNum = 0;
 					boolean hasSameChatroom = false;
-					String[] messageInfos = message.get(2).split(", ");
-					String[] chatroomInfos = new String[10];
+					String[] chatroomUsers = message.get(2).split(", ");
+					String[] chatroomUserFileDatas = new String[10];
 
 					// 이미 채팅방이 존재하는지 확인한다.
 					// 전송해온 채팅방과 서버에 저장된 채팅방을 비교한다.
-					while ((line = chatroomFileReader.readLine()) != null) {
-						chatroomInfos = line.split(", ");
-						for (String messageInfo : messageInfos) {
-							for (String chatroomInfo : chatroomInfos) {
-								if (chatroomInfo.equals(messageInfo)) {
-									count++;
+					while ((chatroomLine = chatroomUserFileReader.readLine()) != null) {
+						chatroomUserFileDatas = chatroomLine.split(", ");
+						for (String chatroomUser : chatroomUsers) {
+							for (String chatroomData : chatroomUserFileDatas) {
+								if (chatroomData.equals(chatroomUser)) {
+									userNum++;
 								}
 							}
 						}
 
-						if (count == messageInfos.length && count == chatroomInfos.length) {
+						if (userNum == chatroomUsers.length && userNum == chatroomUserFileDatas.length) {
 							hasSameChatroom = true;
 							break;
 						}
-						count = 0;
+						userNum = 0;
 					}
 
 					// 채팅방이 이미 존재할 경우 클라이언트에 알림
@@ -429,34 +416,34 @@ public class ChatClientServerThread extends Thread {
 					}
 					// 채팅방이 추가되었음을 클라이언트에 알림
 					else {
-						chatroomFileOutput.write(message.get(2));
-						chatroomFileOutput.newLine();
-						chatroomFileOutput.flush();
+						chatroomUserFileWriter.write(message.get(2));
+						chatroomUserFileWriter.newLine();
+						chatroomUserFileWriter.flush();
 
 						messageWriter.println(MsgKeys.ChatroomAddSuccess.getKey());
 						messageWriter.flush();
 						message.clear();
-						chatroomFileOutput.close();
+						chatroomUserFileWriter.close();
 					}
 				} else if (message.get(0).equals(MsgKeys.ReceiveChatroomsRequest.getKey())) {
 					String userName = message.get(1);
 					String userChatroom = userName + "_chatroom.txt";
 
-					chatroomFile = new File(userChatroom);
-					if (!chatroomFile.exists())
-						chatroomFile.createNewFile();
-					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
+					chatroomUserFile = new File(userChatroom);
+					if (!chatroomUserFile.exists())
+						chatroomUserFile.createNewFile();
+					chatroomUserFileReader = new BufferedReader(new FileReader(userChatroom));
 
-					String line;
-					String chatroomInfo = "";
+					String chatroomUserFileLine;
+					String chatroomUserFileData = "";
 
 					chatroomList = new ArrayList<String>();
 					chatroomList.add("dummy");
 
 					// 해당 유저의 채팅방 리스트를 가져와 리스트에 저장한다.
-					while ((line = chatroomFileReader.readLine()) != null) {
-						chatroomInfo = line;
-						chatroomList.add(chatroomInfo);
+					while ((chatroomUserFileLine = chatroomUserFileReader.readLine()) != null) {
+						chatroomUserFileData = chatroomUserFileLine;
+						chatroomList.add(chatroomUserFileData);
 					}
 
 					// 채팅방이 존재하면 클라이언트로 전송한다.
@@ -474,57 +461,61 @@ public class ChatClientServerThread extends Thread {
 					String line;
 					String userName = message.get(1);
 					String userChatroom = userName + "_chatroom.txt";
-					List<String> rmvChatroomsList = new ArrayList<String>();
-					String[] chatroomsInfo = new String[10];
-					String[] rmvChatInfos = new String[10];
+					List<String> requestedChatroomsList = new ArrayList<String>();
+					String[] chatroomUsers = new String[10];
+					String[] requestedChatroomUsers = new String[10];
 
-					BufferedWriter txtOutput = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
-					chatroomFileReader = new BufferedReader(new FileReader(userChatroom));
+					BufferedWriter tempFileWriter = new BufferedWriter(new FileWriter(FileNames.TempFile.getName()));
+					chatroomUserFileReader = new BufferedReader(new FileReader(userChatroom));
 
 					// 삭제할 채팅방 목록을 가져온다
 					for (int i = 2; i < message.size(); i++) {
-						rmvChatroomsList.add(message.get(i));
+						requestedChatroomsList.add(message.get(i));
 					}
-					while ((line = chatroomFileReader.readLine()) != null) {
-						chatroomsInfo = line.split(", ");
+					while ((line = chatroomUserFileReader.readLine()) != null) {
+						chatroomUsers = line.split(", ");
 						// 해당 채팅방이 존재하는지 확인 한 후, 이를 제외한 채팅방들을 임시파일에 저장한다
-						for (String rmvChatroom : rmvChatroomsList) {
+						for (String Chatroom : requestedChatroomsList) {
 							int count = 0;
-							rmvChatInfos = rmvChatroom.split(", ");
-							for (String chatroomInfo : chatroomsInfo) {
-								for (String rmvChatInfo : rmvChatInfos) {
-									if (chatroomInfo.equals(rmvChatInfo)) {
+							requestedChatroomUsers = Chatroom.split(", ");
+							for (String chatroomUser : chatroomUsers) {
+								for (String requestedUser : requestedChatroomUsers) {
+									if (chatroomUser.equals(requestedUser)) {
 										count++;
 									}
 								}
 							}
 
-							if (count != chatroomsInfo.length || count != rmvChatInfos.length) {
-								for (String chatroomInfo : chatroomsInfo) {
-									txtOutput.write(chatroomInfo);
-									if (!chatroomInfo.equals(chatroomsInfo[chatroomsInfo.length - 1]))
-										txtOutput.write(", ");
+							if (count != chatroomUsers.length || count != requestedChatroomUsers.length) {
+								for (String chatroomInfo : chatroomUsers) {
+									tempFileWriter.write(chatroomInfo);
+									if (!chatroomInfo.equals(chatroomUsers[chatroomUsers.length - 1]))
+										tempFileWriter.write(", ");
 								}
-								txtOutput.newLine();
+								tempFileWriter.newLine();
 							}
-							txtOutput.flush();
+							tempFileWriter.flush();
 						}
 					}
-					txtOutput.close();
+					tempFileWriter.close();
 
 					// 임시 파일의 내용을 채팅방 정보로 복사한다.
 					tempFileReader = new BufferedReader(new FileReader(FileNames.TempFile.getName()));
-					BufferedWriter tmpOutput = new BufferedWriter(new FileWriter(userChatroom));
-					String tmp_line;
-					while ((tmp_line = tempFileReader.readLine()) != null) {
-						tmpOutput.write(tmp_line);
-						tmpOutput.newLine();
-						tmpOutput.flush();
+					BufferedWriter userChatroomFileWriter = new BufferedWriter(new FileWriter(userChatroom));
+					String chatroom;
+					while ((chatroom = tempFileReader.readLine()) != null) {
+						userChatroomFileWriter.write(chatroom);
+						userChatroomFileWriter.newLine();
+						userChatroomFileWriter.flush();
 					}
-					tmpOutput.close();
+					userChatroomFileWriter.close();
 
-					messageWriter.println(MsgKeys.RemoveSuccess.getKey());
-					messageWriter.flush();
+					messageList.clear();
+					messageList.add(MsgKeys.RemoveSuccess.getKey());
+
+					messageListWriter.writeObject(messageList);
+					messageListWriter.flush();
+					messageListWriter.reset();
 				}
 			}
 		} catch (IOException e) {
