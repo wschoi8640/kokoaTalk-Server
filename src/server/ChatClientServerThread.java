@@ -77,7 +77,6 @@ public class ChatClientServerThread extends Thread {
 	public void run() {
 		try {
 			while (true) {
-
 				try {
 					userFile = new File(FileNames.UserFile.getName());
 					friendFile = new File(FileNames.FriendFile.getName());
@@ -99,6 +98,7 @@ public class ChatClientServerThread extends Thread {
 				} catch (EOFException e) {
 					break;
 				}
+				if(!message.isEmpty()) System.out.println("Request : " + message.get(0));
 
 				// Login size : 2, Join size : 3
 				if (message.get(0).equals(MsgKeys.LoginRequest.getKey())) {
